@@ -1,28 +1,39 @@
-let users = []
 
-const getUser = (user) => users.find((u) => u.name.toLowerCase() === user.name.toLowerCase() && u.room.toLowerCase() === user.room.toLowerCase())
+const User = require('./models/User')
 
-const getUserBySocketId = (id) => users.find(u => u.socketId === id)
-
-const addUser = (user) => {
-  const isExist = getUser(user)
-
-  !isExist && users.push(user)
-
-  const currentUser = isExist ?? user;
-  return { isExist: !!isExist, user: currentUser }
+const getUser = async (user) => {
+  const result = await User.findOne({ name: user.name, room: user.room })
+  return result;
 }
 
-const getRoomUsers = (room) => users.filter(u => u.room === room)
+const getUserBySocketId = async (id) => {
+  const result = await User.findOne({ socketIds: id })
+  return result
+}
 
-const removeUser = (user) => {
-  const foundIdx = users.findIndex(u => u.room.toLowerCase() === user.room.toLowerCase() && u.name.toLowerCase() === user.name.toLowerCase())
-  if (foundIdx === -1)
-    return;
+const addUser = async (user) => {
+  const isExist = await getUser(user)
 
-  const removedUser = users[foundIdx]
-  users.splice(foundIdx, 1)
-  return removedUser
+  const result = isExist
+    ? await User.findOneAndUpdate({ name: user.name, room: user.room }, { socketIds: [...isExist.socketIds, user.socketId ?? null] })
+    : await User.create({ name: user.name, room: user.room, socketIds: [user.socketId] ?? [null] })
+  return { isExist: !!isExist, user: result }
+}
+
+const getRoomUsers = async (room) => {
+  const result = await User.find({ room })
+  return result
+}
+
+const removeUser = async (user) => {
+  const result = await getUser(user)
+  const isManySockets = result.socketIds.length > 1
+  if (result) {
+    isManySockets
+      ? await User.findOneAndUpdate({ name: result.name, room: result.room }, { socketIds: result.socketIds.filter(s => s !== user.socketId) })
+      : await User.deleteOne({ name: result.name, room: result.room })
+  }
+  return { isManySockets, user: result }
 }
 
 module.exports = {
